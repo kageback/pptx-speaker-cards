@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from pptx import Presentation
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib.colors import grey
 from reportlab.pdfgen import canvas
@@ -305,18 +305,13 @@ def fit_text_to_card(paragraphs: List[FormattedParagraph], card_width: float,
                      card_height: float, config: Config,
                      has_title: bool) -> Tuple[float, bool]:
     """
-    Find font size that fits text in card (landscape orientation).
-    card_width and card_height are the portrait dimensions, which will be rotated.
+    Find font size that fits text in card.
     Returns (font_size, fits_completely).
     """
-    # In landscape mode, dimensions are swapped
-    landscape_width = card_height
-    landscape_height = card_width
-
     # Calculate available content area
-    content_width = landscape_width - 2 * config.card_padding
+    content_width = card_width - 2 * config.card_padding
     title_height = 15 * mm if has_title else 5 * mm  # Reserve space for title/margin
-    content_height = landscape_height - 2 * config.card_padding - title_height
+    content_height = card_height - 2 * config.card_padding - title_height
 
     # Start with body font size or default
     initial_size = config.body_font_size if config.body_font_size else 10.0
@@ -342,14 +337,10 @@ def split_paragraphs_for_continuation(paragraphs: List[FormattedParagraph],
                                       card_width: float, card_height: float,
                                       config: Config, font_size: float,
                                       has_title: bool) -> List[List[FormattedParagraph]]:
-    """Split paragraphs into groups that fit on separate cards (landscape orientation)."""
-    # In landscape mode, dimensions are swapped
-    landscape_width = card_height
-    landscape_height = card_width
-
-    content_width = landscape_width - 2 * config.card_padding
+    """Split paragraphs into groups that fit on separate cards."""
+    content_width = card_width - 2 * config.card_padding
     title_height = 15 * mm if has_title else 5 * mm
-    content_height = landscape_height - 2 * config.card_padding - title_height
+    content_height = card_height - 2 * config.card_padding - title_height
 
     cards = []
     current_card = []
@@ -437,7 +428,8 @@ def generate_cards_for_slide(slide_data: SlideData, config: Config,
 
 
 def draw_cut_lines(c: canvas.Canvas):
-    """Draw dotted cut lines between cards."""
+    """Draw dotted cut lines between cards on landscape page."""
+    page_size = landscape(A4)
     c.saveState()
 
     # Set line style
@@ -446,24 +438,25 @@ def draw_cut_lines(c: canvas.Canvas):
     c.setDash([2, 2], 0)
 
     # Vertical center line
-    x_center = A4[0] / 2
-    c.line(x_center, 0, x_center, A4[1])
+    x_center = page_size[0] / 2
+    c.line(x_center, 0, x_center, page_size[1])
 
     # Horizontal center line
-    y_center = A4[1] / 2
-    c.line(0, y_center, A4[0], y_center)
+    y_center = page_size[1] / 2
+    c.line(0, y_center, page_size[0], y_center)
 
     c.restoreState()
 
 
 def get_card_position(card_index: int) -> Tuple[float, float, float, float]:
     """
-    Get position and dimensions for card at given index (0-3).
+    Get position and dimensions for card at given index (0-3) on landscape page.
     Returns (x, y, width, height) where x, y is bottom-left corner.
     """
-    # Card dimensions
-    card_width = A4[0] / 2
-    card_height = A4[1] / 2
+    page_size = landscape(A4)
+    # Card dimensions on landscape page
+    card_width = page_size[0] / 2
+    card_height = page_size[1] / 2
 
     # Position in grid
     col = card_index % 2
@@ -471,51 +464,38 @@ def get_card_position(card_index: int) -> Tuple[float, float, float, float]:
 
     x = col * card_width
     # ReportLab origin is bottom-left, so flip row
-    y = A4[1] - (row + 1) * card_height
+    y = page_size[1] - (row + 1) * card_height
 
     return x, y, card_width, card_height
 
 
 def render_card(c: canvas.Canvas, card: Card, x: float, y: float,
                 width: float, height: float, config: Config, font_size: float):
-    """Render a single card at given position in landscape orientation."""
+    """Render a single card at given position (no rotation needed for landscape page)."""
     padding = config.card_padding
-
-    # Save state and rotate for landscape orientation
-    c.saveState()
-
-    # Translate to bottom-right corner of card, then rotate 90 degrees counterclockwise
-    # This makes the content render in landscape orientation within the card bounds
-    c.translate(x + width, y)
-    c.rotate(90)
-
-    # After rotation, dimensions are swapped: height becomes width, width becomes height
-    # The rotated card is now: height (wide) x width (tall) = 148.5mm x 105mm (landscape)
-    landscape_width = height
-    landscape_height = width
 
     # Title
     if card.title:
-        title_font_size = config.title_font_size if config.title_font_size else 12.0
+        title_font_size = config.title_font_size
         c.setFont('Helvetica-Bold', title_font_size)
-        # Title at top of card (in rotated coordinates)
-        title_y = landscape_height - padding - title_font_size
-        c.drawString(padding, title_y, card.title)
+        # Title at top of card
+        title_y = y + height - padding - title_font_size
+        c.drawString(x + padding, title_y, card.title)
 
     # Slide number
     if card.slide_number:
         number_font_size = 8
         c.setFont('Helvetica', number_font_size)
-        # Number at top-right corner (in rotated coordinates)
-        number_y = landscape_height - padding - number_font_size
-        number_x = landscape_width - padding - c.stringWidth(card.slide_number, 'Helvetica', number_font_size)
+        # Number at top-right corner
+        number_y = y + height - padding - number_font_size
+        number_x = x + width - padding - c.stringWidth(card.slide_number, 'Helvetica', number_font_size)
         c.drawString(number_x, number_y, card.slide_number)
 
     # Content
     if card.paragraphs:
-        content_width = landscape_width - 2 * padding
-        content_x = padding
-        content_y_top = landscape_height - padding - (15 * mm if card.title else 5 * mm)
+        content_width = width - 2 * padding
+        content_x = x + padding
+        content_y_top = y + height - padding - (15 * mm if card.title else 5 * mm)
 
         # Create paragraph style
         style = create_paragraph_style(font_size)
@@ -527,20 +507,18 @@ def render_card(c: canvas.Canvas, card: Card, x: float, y: float,
         paragraph = Paragraph(html_text, style)
 
         # Wrap and draw
-        w, h = paragraph.wrap(content_width, landscape_height)
+        w, h = paragraph.wrap(content_width, height)
         paragraph.drawOn(c, content_x, content_y_top - h)
-
-    # Restore state
-    c.restoreState()
 
 
 def render_pdf(cards: List[Card], output_path: str, config: Config):
-    """Render all cards to PDF."""
-    c = canvas.Canvas(output_path, pagesize=A4)
+    """Render all cards to PDF in landscape orientation."""
+    page_size = landscape(A4)
+    c = canvas.Canvas(output_path, pagesize=page_size)
 
-    # Calculate card dimensions
-    card_width = A4[0] / 2
-    card_height = A4[1] / 2
+    # Calculate card dimensions (landscape page, no rotation needed)
+    card_width = page_size[0] / 2
+    card_height = page_size[1] / 2
 
     # Determine font size for each card
     card_font_sizes = []
