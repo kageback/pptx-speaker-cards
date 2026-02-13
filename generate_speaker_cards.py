@@ -114,11 +114,12 @@ class Config:
 
 
 def escape_html(text: str) -> str:
-    """Escape special HTML characters."""
+    """Escape special HTML characters and handle tabs."""
     return (text
             .replace('&', '&amp;')
             .replace('<', '&lt;')
-            .replace('>', '&gt;'))
+            .replace('>', '&gt;')
+            .replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;'))  # Tab = 4 non-breaking spaces
 
 
 def is_slide_hidden(slide) -> bool:
