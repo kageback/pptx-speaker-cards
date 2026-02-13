@@ -1,0 +1,29 @@
+# Ignore everything by default
+*
+
+# But include these files
+!.gitignore
+!generate_speaker_cards.py
+!requirements.txt
+!README.md
+
+# Ignore Python cache and virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+*.egg-info/
+
+# Ignore output files
+*.pdf
+*.pptx
+~$*.pptx
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
