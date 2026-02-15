@@ -81,11 +81,8 @@ class Card:
         parts = []
         for para in self.paragraphs:
             html = para.to_html()
-            # Empty paragraphs (for spacing) get extra line break
-            if not html.strip() or (para.runs and all(not r.text.strip() for r in para.runs)):
-                parts.append('<br/>')  # Empty line = double break
-            else:
-                parts.append(html)
+            # All paragraphs treated equally - one line break each
+            parts.append(html if html.strip() else '')
             parts.append('<br/>')
         return ''.join(parts)
 
@@ -276,7 +273,7 @@ def create_paragraph_style(font_size: float) -> ParagraphStyle:
         'CardBody',
         fontName='Helvetica',
         fontSize=font_size,
-        leading=font_size * 1.2,
+        leading=font_size * 1.05,  # Tighter line spacing (was 1.2)
         leftIndent=0,
         rightIndent=0,
         alignment=TA_LEFT,
@@ -311,7 +308,7 @@ def fit_text_to_card(paragraphs: List[FormattedParagraph], card_width: float,
     """
     # Calculate available content area
     content_width = card_width - 2 * config.card_padding
-    title_height = 15 * mm if has_title else 5 * mm  # Reserve space for title/margin
+    title_height = 5 * mm if has_title else 5 * mm  # Minimal spacing - just title height
     content_height = card_height - 2 * config.card_padding - title_height
 
     # Start with body font size or default
@@ -340,7 +337,7 @@ def split_paragraphs_for_continuation(paragraphs: List[FormattedParagraph],
                                       has_title: bool) -> List[List[FormattedParagraph]]:
     """Split paragraphs into groups that fit on separate cards."""
     content_width = card_width - 2 * config.card_padding
-    title_height = 15 * mm if has_title else 5 * mm
+    title_height = 5 * mm if has_title else 5 * mm  # Minimal spacing - just title height
     content_height = card_height - 2 * config.card_padding - title_height
 
     cards = []
@@ -496,7 +493,7 @@ def render_card(c: canvas.Canvas, card: Card, x: float, y: float,
     if card.paragraphs:
         content_width = width - 2 * padding
         content_x = x + padding
-        content_y_top = y + height - padding - (15 * mm if card.title else 5 * mm)
+        content_y_top = y + height - padding - (5 * mm if card.title else 5 * mm)
 
         # Create paragraph style
         style = create_paragraph_style(font_size)
