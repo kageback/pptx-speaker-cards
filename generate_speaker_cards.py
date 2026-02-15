@@ -6,9 +6,13 @@ Extracts speaker notes from PowerPoint presentations and generates PDF speaker c
 
 import argparse
 import sys
+import os
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+
+import requests
 
 from pptx import Presentation
 from reportlab.lib.pagesizes import A4, landscape
@@ -604,56 +608,120 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def is_url(input_str: str) -> bool:
+    """Check if input string is a URL."""
+    return input_str.startswith(('http://', 'https://'))
+
+
+def download_from_url(url: str) -> str:
+    """
+    Download PowerPoint file from URL to temporary location.
+    Returns path to temporary file.
+    """
+    print(f"Downloading from URL...")
+
+    # Add download parameter for SharePoint/OneDrive links
+    if 'sharepoint.com' in url or 'onedrive.live.com' in url or '1drv.ms' in url:
+        separator = '&' if '?' in url else '?'
+        url = url + separator + 'download=1'
+
+    # Download with proper headers
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (compatible; SpeakerCards/1.0)'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, allow_redirects=True, timeout=60)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Error: Failed to download from URL: {e}")
+        sys.exit(1)
+
+    # Create temporary file
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix='.pptx',
+        prefix='speaker_cards_'
+    )
+    temp_file.write(response.content)
+    temp_file.close()
+
+    print(f"Downloaded to temporary file: {temp_file.name}")
+    return temp_file.name
+
+
 def main():
     """Main entry point."""
     args = parse_arguments()
 
-    # Validate input file
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"Error: File not found: {args.input}")
-        sys.exit(1)
-
-    # Determine output path
-    if args.output:
-        output_path = args.output
+    # Detect if input is URL or file path
+    if is_url(args.input):
+        # Download from URL to temporary file
+        pptx_path = download_from_url(args.input)
+        cleanup_needed = True
+        # Use original filename for output if not specified
+        if args.output:
+            output_path = args.output
+        else:
+            # Use current directory for output when input is URL
+            output_path = "speaker_notes.pdf"
     else:
-        output_path = str(input_path.parent / f"{input_path.stem}_speaker_notes.pdf")
+        # Validate local file
+        input_path = Path(args.input)
+        if not input_path.exists():
+            print(f"Error: File not found: {args.input}")
+            sys.exit(1)
 
-    # Build config
-    config = Config(
-        title_font_size=args.title_font_size,
-        body_font_size=args.body_font_size,
-        margin_top=args.margin_top * mm,
-        margin_bottom=args.margin_bottom * mm,
-        margin_left=args.margin_left * mm,
-        margin_right=args.margin_right * mm,
-        show_slide_numbers=(args.slide_number == 'yes'),
-        include_hidden=args.include_hidden,
-        output_path=output_path
-    )
+        pptx_path = args.input
+        cleanup_needed = False
 
-    print(f"Extracting slides from {args.input}...")
-    slides = extract_slides_from_pptx(args.input, config)
+        # Determine output path for local file
+        if args.output:
+            output_path = args.output
+        else:
+            output_path = str(input_path.parent / f"{input_path.stem}_speaker_notes.pdf")
 
-    if not slides:
-        print("Error: No slides found (or all skipped)")
-        sys.exit(1)
+    try:
+        # Build config
+        config = Config(
+            title_font_size=args.title_font_size,
+            body_font_size=args.body_font_size,
+            margin_top=args.margin_top * mm,
+            margin_bottom=args.margin_bottom * mm,
+            margin_left=args.margin_left * mm,
+            margin_right=args.margin_right * mm,
+            show_slide_numbers=(args.slide_number == 'yes'),
+            include_hidden=args.include_hidden,
+            output_path=output_path
+        )
 
-    print(f"\nGenerating cards for {len(slides)} slides...")
-    all_cards = []
-    card_width = A4[0] / 2
-    card_height = A4[1] / 2
+        print(f"Extracting slides from PowerPoint...")
+        slides = extract_slides_from_pptx(pptx_path, config)
 
-    for slide in slides:
-        cards = generate_cards_for_slide(slide, config, card_width, card_height)
-        all_cards.extend(cards)
+        if not slides:
+            print("Error: No slides found (or all skipped)")
+            sys.exit(1)
 
-    print(f"\nRendering {len(all_cards)} cards to PDF...")
-    render_pdf(all_cards, output_path, config)
+        print(f"\nGenerating cards for {len(slides)} slides...")
+        all_cards = []
+        card_width = A4[0] / 2
+        card_height = A4[1] / 2
 
-    print(f"\n✓ Generated {len(all_cards)} cards from {len(slides)} slides")
-    print(f"✓ Output: {output_path}")
+        for slide in slides:
+            cards = generate_cards_for_slide(slide, config, card_width, card_height)
+            all_cards.extend(cards)
+
+        print(f"\nRendering {len(all_cards)} cards to PDF...")
+        render_pdf(all_cards, output_path, config)
+
+        print(f"\n✓ Generated {len(all_cards)} cards from {len(slides)} slides")
+        print(f"✓ Output: {output_path}")
+
+    finally:
+        # Clean up temporary file if downloaded from URL
+        if cleanup_needed and os.path.exists(pptx_path):
+            os.unlink(pptx_path)
+            print("✓ Cleaned up temporary file")
 
 
 if __name__ == '__main__':
