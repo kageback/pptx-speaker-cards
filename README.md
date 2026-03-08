@@ -250,7 +250,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and changes.
 
 ## Author
 
-Magnus Kågebäck
+Mikael Kågebäck
 
 ## Acknowledgments
 

@@ -6,5 +6,5 @@ Creates A4 landscape PDF with 4 cards per page (2x2 grid).
 """
 
 __version__ = "1.0.0"
-__author__ = "Magnus Kågebäck"
+__author__ = "Mikael Kågebäck"
 __license__ = "MIT"
