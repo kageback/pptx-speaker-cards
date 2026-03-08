@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pptx-speaker-cards"
-version = "1.0.0"
+version = "1.0.1"
 description = "Generate printable speaker cards from PowerPoint presentation notes"
 readme = "README.md"
 authors = [{name = "Mikael Kågebäck", email = "mikael@kageback.se"}]
